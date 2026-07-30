@@ -11,7 +11,10 @@
     "prebuild": "npm run sync:posts"
   },
   "dependencies": {
+    "@stefanjudis/sparkly-text": "^1.1.2",
+    "@tailwindcss/typography": "^0.5.20",
     "d3": "^7.9.0",
+    "embla-carousel-react": "^8.6.0",
     "fuse.js": "^7.5.0",
     "next": "16.2.12",
     "next-mdx-remote": "^6.0.0",

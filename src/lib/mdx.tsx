@@ -4,15 +4,41 @@ import { mdxComponents } from "@/components/mdx";
 import type { ReactNode } from "react";
 
 /**
+ * Strip <style> blocks, <link> tags, and self-close void HTML elements
+ * that MDX's strict XML parser would reject (e.g., <hr>, <br>, <img>).
+ * The dashboard provides its own styling.
+ */
+function sanitizeBody(body: string): string {
+  // Remove <style>...</style> blocks
+  let out = body.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
+  // Remove <link rel="stylesheet" ...> tags
+  out = out.replace(/<link[^>]*rel=["']stylesheet["'][^>]*\/?>/gi, "");
+  // Strip style="..." attributes (React/JSX requires objects, not strings)
+  out = out.replace(/\sstyle=["'][^"']*["']/gi, "");
+  // Convert class= to className= for JSX compatibility
+  out = out.replace(/\sclass=/g, " className=");
+  // Self-close void HTML elements that MDX requires to be XML-compliant
+  const voidElements = ["hr", "br", "img", "input", "meta", "area", "base", "col", "embed", "source", "track", "wbr"];
+  for (const tag of voidElements) {
+    const re = new RegExp(`<${tag}(\\s[^>]*?[^/])>`, "gi");
+    out = out.replace(re, `<${tag}$1 />`);
+    const bareRe = new RegExp(`<${tag}>`, "gi");
+    out = out.replace(bareRe, `<${tag} />`);
+  }
+  return out;
+}
+
+/**
  * Compile raw MDX body to React nodes using next-mdx-remote/rsc.
  * Wraps compilation in try/catch — a broken post renders a fallback
  * box linking to the original rather than failing the build.
  */
 export async function renderPost(body: string): Promise<ReactNode> {
+  const clean = sanitizeBody(body);
   try {
     return (
       <MDXRemote
-        source={body}
+        source={clean}
         options={{
           mdxOptions: {
             remarkPlugins: [remarkGfm],

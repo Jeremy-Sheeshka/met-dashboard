@@ -17,6 +17,41 @@ function sanitizeBody(body: string): string {
   out = out.replace(/\sstyle=["'][^"']*["']/gi, "");
   // Convert class= to className= for JSX compatibility
   out = out.replace(/\sclass=/g, " className=");
+  // FIX 2: <p> tags with class/style are block wrappers that can contain
+  // markdown paragraphs, causing nested-<p> hydration errors. Convert them
+  // to <div> tags (both open and close) to eliminate nesting.
+  // Strategy: match complete <p class=...>content</p> blocks using a simple
+  // greedy match (safe since these <p> tags don't contain other <p> tags).
+  out = out.replace(
+    /<p(\s[^>]*(?:className|style)=[^>]*)>([\s\S]*?)<\/p>/g,
+    "<div$1>$2</div>",
+  );
+  // FIX 3: Map HTML boolean attributes to React camelCase
+  const attrMap: Record<string, string> = {
+    allowfullscreen: "allowFullScreen",
+    frameborder: "frameBorder",
+    tabindex: "tabIndex",
+    autoplay: "autoPlay",
+    autofocus: "autoFocus",
+    crossorigin: "crossOrigin",
+    datetime: "dateTime",
+    enctype: "encType",
+    formaction: "formAction",
+    formmethod: "formMethod",
+    formtarget: "formTarget",
+    hreflang: "hrefLang",
+    inputmode: "inputMode",
+    maxlength: "maxLength",
+    minlength: "minLength",
+    novalidate: "noValidate",
+    playsinline: "playsInline",
+    readonly: "readOnly",
+    srclang: "srcLang",
+  };
+  for (const [html, jsx] of Object.entries(attrMap)) {
+    const re = new RegExp(`\\s${html}(?=[=\\s/>])`, "gi");
+    out = out.replace(re, ` ${jsx}`);
+  }
   // Self-close void HTML elements that MDX requires to be XML-compliant
   const voidElements = ["hr", "br", "img", "input", "meta", "area", "base", "col", "embed", "source", "track", "wbr"];
   for (const tag of voidElements) {

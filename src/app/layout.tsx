@@ -42,6 +42,12 @@ export default function RootLayout({
             </Link>
             <div className="flex items-center gap-6 text-sm font-medium">
               <Link
+                href="/"
+                className="hover:opacity-75 transition-opacity"
+              >
+                Explore
+              </Link>
+              <Link
                 href="/courses"
                 className="hover:opacity-75 transition-opacity"
               >

@@ -218,3 +218,110 @@ export function getCourseConceptGraph(courseId: string): ConceptGraph | null {
 
   return { concepts, posts: postNodes, links };
 }
+
+// ---------------------------------------------------------------------------
+// Global graph — unions all courses, posts, and concepts into one galaxy
+// ---------------------------------------------------------------------------
+
+export interface GlobalNode {
+  id: string;
+  type: "course" | "post" | "concept";
+  label: string;
+  // post fields
+  slug?: string;
+  title?: string;
+  course?: string;
+  readingTime?: number;
+  interactive?: boolean;
+  excerpt?: string;
+  date?: string;
+  url?: string;
+  // concept fields
+  docFreq?: number;
+  totalFreq?: number;
+  // course fields
+  postCount?: number;
+}
+
+export interface GlobalLink {
+  source: string;
+  target: string;
+  type: "membership" | "concept";
+  weight: number;
+}
+
+export interface GlobalGraph {
+  nodes: GlobalNode[];
+  links: GlobalLink[];
+}
+
+export function getGlobalGraph(): GlobalGraph {
+  const allPosts = getAllPosts();
+  const courses = [...new Set(allPosts.map((p) => p.course).filter(Boolean))] as string[];
+
+  const nodes: GlobalNode[] = [];
+  const links: GlobalLink[] = [];
+  const conceptIds = new Set<string>();
+
+  // Course nodes
+  for (const courseId of courses) {
+    const coursePosts = allPosts.filter((p) => p.course === courseId);
+    nodes.push({
+      id: `course-${courseId}`,
+      type: "course",
+      label: courseId,
+      postCount: coursePosts.length,
+    });
+
+    // Post nodes + membership links
+    for (const post of coursePosts) {
+      nodes.push({
+        id: `post-${post.slug}`,
+        type: "post",
+        label: post.title.length > 45 ? post.title.slice(0, 42) + "…" : post.title,
+        slug: post.slug,
+        title: post.title,
+        course: courseId,
+        readingTime: post.readingTime,
+        interactive: post.interactive,
+        excerpt: post.excerpt,
+        date: post.date,
+        url: post.url,
+      });
+      links.push({
+        source: `course-${courseId}`,
+        target: `post-${post.slug}`,
+        type: "membership",
+        weight: 0.5,
+      });
+    }
+
+    // Concept nodes + links (from per-course extraction)
+    const cg = getCourseConceptGraph(courseId);
+    if (!cg) continue;
+
+    for (const c of cg.concepts) {
+      const gid = `concept-${c.id}`;
+      if (!conceptIds.has(gid)) {
+        conceptIds.add(gid);
+        nodes.push({
+          id: gid,
+          type: "concept",
+          label: c.label,
+          docFreq: c.docFreq,
+          totalFreq: c.totalFreq,
+        });
+      }
+    }
+    for (const l of cg.links) {
+      links.push({
+        source: `concept-${l.concept}`,
+        target: `post-${l.postSlug}`,
+        type: "concept",
+        weight: l.weight,
+      });
+    }
+  }
+
+  return { nodes, links };
+}

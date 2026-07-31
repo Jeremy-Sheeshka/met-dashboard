@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPostsByCourse, getAllCourses, renderNative } from "@/lib/content";
-import { getCourseConceptGraph } from "@/lib/concepts";
-import ConceptMap from "@/components/ConceptMap";
+import { getPostsByCourse, getAllCourses } from "@/lib/content";
 
 export async function generateStaticParams() {
   return getAllCourses().map((courseId) => ({
@@ -20,68 +18,41 @@ export default async function CoursePage({
   if (posts.length === 0) notFound();
 
   const courseLabel = posts[0]?.course ?? courseId.toUpperCase();
-  const conceptGraph = getCourseConceptGraph(courseId);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      <Link
-        href="/courses"
-        className="text-sm text-gray-500 dark:text-gray-400 hover:underline mb-4 inline-block"
-      >
-        ← All Courses
-      </Link>
-      <h1 className="text-3xl font-bold mb-2">{courseLabel}</h1>
-      <p className="text-gray-500 dark:text-gray-400 mb-8">
+    <div className="max-w-2xl mx-auto px-6 py-12">
+      <h1 className="text-2xl font-bold mb-2">{courseLabel}</h1>
+      <p className="text-gray-500 dark:text-gray-400 mb-6">
         {posts.length} post{posts.length !== 1 ? "s" : ""}
       </p>
 
-      {/* D3 concept map */}
-      {conceptGraph ? (
-        <div className="mb-10">
-          <h2 className="text-lg font-semibold mb-3 text-gray-500 dark:text-gray-400">
-            Knowledge Web
-          </h2>
-          <ConceptMap graph={conceptGraph} />
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-center h-32 mb-10 text-sm text-gray-400 dark:text-gray-500">
-          Not enough posts to map concepts yet.
-        </div>
-      )}
+      {/* Explore in galaxy */}
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 mb-8 text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+          Explore {courseLabel} in the knowledge graph.
+        </p>
+        <Link
+          href={`/?course=${courseId.toLowerCase()}`}
+          className="inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-4 py-1.5 text-sm font-medium hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors"
+        >
+          Open in Galaxy →
+        </Link>
+      </div>
 
-      {/* Post cards */}
-      <div className="space-y-4">
-        {posts.map((post) => {
-          const isNative = renderNative(post);
-          return (
-            <Link
-              key={post.slug}
-              href={`/courses/${courseId}/${post.slug}`}
-              className="block rounded-xl border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-400 dark:hover:border-gray-600 transition-colors bg-white dark:bg-gray-900"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <h2 className="font-semibold text-lg leading-snug mb-1">
-                    {post.title}
-                  </h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
-                    {post.description}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {!isNative && (
-                    <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2.5 py-0.5 text-xs font-medium">
-                      Interactive
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                    {post.readingTime} min
-                  </span>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+      {/* Post list (compact, for SEO + direct nav) */}
+      <div className="space-y-2">
+        {posts.map((post) => (
+          <Link
+            key={post.slug}
+            href={`/courses/${courseId}/${post.slug}`}
+            className="block rounded-lg border border-gray-100 dark:border-gray-800 px-4 py-3 hover:border-gray-300 dark:hover:border-gray-700 transition-colors bg-white dark:bg-gray-900"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium truncate">{post.title}</span>
+              <span className="text-xs text-gray-400 shrink-0">{post.readingTime}m</span>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

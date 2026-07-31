@@ -136,11 +136,15 @@ IPs. Tunnels are unaffected (they're outbound).
 | ufw         | Not installed                   |
 | nftables    | Inactive (ruleset empty)        |
 | iptables    | Docker-managed rules only       |
-| 80/443      | `coolify-proxy` publishes to host (docker-proxy) |
-| INPUT policy | ACCEPT (no restrictions)       |
+| 80/443      | `coolify-proxy` publishes to host via Docker (docker-proxy) |
+| Traffic path | `FORWARD → DOCKER-USER → DOCKER-FORWARD → DOCKER` |
+| DOCKER-USER  | **Empty** (our target chain for Cloudflare IP rules) |
+| INPUT policy | ACCEPT (irrelevant — Docker-published ports bypass INPUT) |
 
-**Conclusion:** iptables is the active tool. No host firewall currently
-restricts 80/443. Docker's proxy publishes 80/443 to `0.0.0.0`.
+**Conclusion:** iptables is the active tool. Because 80/443 are
+Docker-published ports, traffic traverses the `FORWARD` chain, not `INPUT`.
+Docker's `DOCKER-USER` chain (at the top of `FORWARD`) is empty — we insert
+our allow-then-deny rules there.
 
 ### Step 9a — Fetch current Cloudflare IPs
 
@@ -168,21 +172,23 @@ while read cidr; do
   ip6tables -A CLOUDFLARE-ALLOW -s "$cidr" -p tcp --dport 443 -j ACCEPT
 done < /tmp/cf-ips-v6.txt
 
-# Prepend the CLOUDFLARE-ALLOW chain to INPUT for ports 80/443
-iptables -I INPUT 1 -p tcp --dport 80 -j CLOUDFLARE-ALLOW
-iptables -I INPUT 1 -p tcp --dport 443 -j CLOUDFLARE-ALLOW
-ip6tables -I INPUT 1 -p tcp --dport 80 -j CLOUDFLARE-ALLOW
-ip6tables -I INPUT 1 -p tcp --dport 443 -j CLOUDFLARE-ALLOW
+# Insert Cloudflare-allow jump at the TOP of DOCKER-USER (before DROP)
+# Docker-published ports traverse FORWARD → DOCKER-USER, NOT INPUT
+iptables -I DOCKER-USER 1 -p tcp --dport 80 -j CLOUDFLARE-ALLOW
+iptables -I DOCKER-USER 1 -p tcp --dport 443 -j CLOUDFLARE-ALLOW
+ip6tables -I DOCKER-USER 1 -p tcp --dport 80 -j CLOUDFLARE-ALLOW
+ip6tables -I DOCKER-USER 1 -p tcp --dport 443 -j CLOUDFLARE-ALLOW
 ```
 
 ### Step 9c — Add the default-deny (ONLY after 9b succeeds)
 
 ```bash
-# Drop all other traffic to 80/443
-iptables -A INPUT -p tcp --dport 80 -j DROP
-iptables -A INPUT -p tcp --dport 443 -j DROP
-ip6tables -A INPUT -p tcp --dport 80 -j DROP
-ip6tables -A INPUT -p tcp --dport 443 -j DROP
+# Append DROP for 80/443 at the END of DOCKER-USER (after the ALLOW jump)
+# Non-Cloudflare traffic passes through CLOUDFLARE-ALLOW unmatched and hits DROP
+iptables -A DOCKER-USER -p tcp --dport 80 -j DROP
+iptables -A DOCKER-USER -p tcp --dport 443 -j DROP
+ip6tables -A DOCKER-USER -p tcp --dport 80 -j DROP
+ip6tables -A DOCKER-USER -p tcp --dport 443 -j DROP
 ```
 
 ### Step 9d — Persist across reboots
@@ -198,16 +204,23 @@ ip6tables-save > /etc/iptables/rules.v6
 
 ### Step 9e — Verify (do ALL of these)
 
-**From the host itself (should still work):**
+**Check the rules are in place:**
 ```bash
-curl -sI http://localhost:80 | head -1   # should return HTTP/1.1
+iptables -L DOCKER-USER -n -v --line-numbers
+# Should show: #1 CLOUDFLARE-ALLOW tcp dpt:80, #2 CLOUDFLARE-ALLOW tcp dpt:443,
+#              #3 DROP tcp dpt:80, #4 DROP tcp dpt:443
+```
+
+**From the host itself (should still work — localhost bypasses FORWARD):**
+```bash
+curl -sI http://localhost:80 | head -1   # HTTP/1.1 200 (or redirect)
 curl -sI https://localhost:443 -k | head -1
 ```
 
 **From a non-Cloudflare network** (phone on mobile data, or a VPS):
 ```bash
 curl -sI --connect-timeout 5 http://<origin-ip>:80 | head -1
-# Expected: timeout or connection refused (NOT the site HTML)
+# Expected: timeout or no response (NOT the site HTML)
 ```
 
 **The proxied sites must still load:**
@@ -221,20 +234,23 @@ curl -sI https://guac.jeremysheeshka.ca | head -3
 ### Rollback — instant recovery
 
 ```bash
-# Flush the Cloudflare allow chain and remove the INPUT rules
-iptables -D INPUT -p tcp --dport 80 -j DROP 2>/dev/null
-iptables -D INPUT -p tcp --dport 443 -j DROP 2>/dev/null
-iptables -D INPUT -p tcp --dport 80 -j CLOUDFLARE-ALLOW 2>/dev/null
-iptables -D INPUT -p tcp --dport 443 -j CLOUDFLARE-ALLOW 2>/dev/null
+# Remove the rules from DOCKER-USER (reverse order: DROP first, then ALLOW jumps)
+iptables -D DOCKER-USER -p tcp --dport 443 -j DROP 2>/dev/null
+iptables -D DOCKER-USER -p tcp --dport 80 -j DROP 2>/dev/null
+iptables -D DOCKER-USER -p tcp --dport 443 -j CLOUDFLARE-ALLOW 2>/dev/null
+iptables -D DOCKER-USER -p tcp --dport 80 -j CLOUDFLARE-ALLOW 2>/dev/null
 iptables -F CLOUDFLARE-ALLOW
 iptables -X CLOUDFLARE-ALLOW
 
-ip6tables -D INPUT -p tcp --dport 80 -j DROP 2>/dev/null
-ip6tables -D INPUT -p tcp --dport 443 -j DROP 2>/dev/null
-ip6tables -D INPUT -p tcp --dport 80 -j CLOUDFLARE-ALLOW 2>/dev/null
-ip6tables -D INPUT -p tcp --dport 443 -j CLOUDFLARE-ALLOW 2>/dev/null
+ip6tables -D DOCKER-USER -p tcp --dport 443 -j DROP 2>/dev/null
+ip6tables -D DOCKER-USER -p tcp --dport 80 -j DROP 2>/dev/null
+ip6tables -D DOCKER-USER -p tcp --dport 443 -j CLOUDFLARE-ALLOW 2>/dev/null
+ip6tables -D DOCKER-USER -p tcp --dport 80 -j CLOUDFLARE-ALLOW 2>/dev/null
 ip6tables -F CLOUDFLARE-ALLOW
 ip6tables -X CLOUDFLARE-ALLOW
+
+# DOCKER-USER is now back to its original (empty) state.
+# Docker's own DOCKER-FORWARD chain handles port 80/443 normally.
 ```
 
 After rollback, 80/443 are back to ACCEPT for all sources. Verify the
@@ -242,8 +258,9 @@ proxied sites still work.
 
 ### Router-level alternative
 
-If iptables rules don't persist or Docker interferes (docker-proxy may
-bypass iptables INPUT in some configurations), hardening must be done at
+If iptables rules don't persist, or if `docker-proxy` bypasses the
+DOCKER-USER chain (unlikely — DOCKER-USER is specifically designed for
+user rules that run before Docker's own), hardening can be done at
 the **home router** level instead:
 
 1. Log into the router admin panel

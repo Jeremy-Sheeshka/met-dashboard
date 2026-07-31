@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPostsByCourse, getAllCourses, renderNative } from "@/lib/content";
+import { getCourseConceptGraph } from "@/lib/concepts";
+import ConceptMap from "@/components/ConceptMap";
 
 export async function generateStaticParams() {
   return getAllCourses().map((courseId) => ({
@@ -18,6 +20,7 @@ export default async function CoursePage({
   if (posts.length === 0) notFound();
 
   const courseLabel = posts[0]?.course ?? courseId.toUpperCase();
+  const conceptGraph = getCourseConceptGraph(courseId);
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -32,10 +35,19 @@ export default async function CoursePage({
         {posts.length} post{posts.length !== 1 ? "s" : ""}
       </p>
 
-      {/* D3 concept map placeholder */}
-      <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-center h-48 mb-10 text-gray-400 dark:text-gray-500">
-        D3 concept map — coming soon
-      </div>
+      {/* D3 concept map */}
+      {conceptGraph ? (
+        <div className="mb-10">
+          <h2 className="text-lg font-semibold mb-3 text-gray-500 dark:text-gray-400">
+            Knowledge Web
+          </h2>
+          <ConceptMap graph={conceptGraph} />
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-center h-32 mb-10 text-sm text-gray-400 dark:text-gray-500">
+          Not enough posts to map concepts yet.
+        </div>
+      )}
 
       {/* Post cards */}
       <div className="space-y-4">

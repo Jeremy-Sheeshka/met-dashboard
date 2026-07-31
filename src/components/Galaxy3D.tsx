@@ -392,7 +392,7 @@ export default function Galaxy3D({ graph }: { graph: GlobalGraph }) {
       }
       // post submenu label
       const el = document.createElement("div");
-      el.textContent = pd.gnode.title && pd.gnode.title.length > 34 ? pd.gnode.title.slice(0, 32) + "…" : pd.gnode.title;
+      el.textContent = pd.gnode.title && pd.gnode.title.length > 34 ? pd.gnode.title.slice(0, 32) + "…" : (pd.gnode.title ?? null);
       el.style.cssText = `color:${isDark ? "#eef2fb" : "#1d2433"};font-size:11px;font-weight:600;background:${isDark ? "rgba(15,20,34,0.78)" : "rgba(255,255,255,0.82)"};padding:2px 7px;border-radius:9px;border:1px solid ${pd.color}66;opacity:0;white-space:nowrap;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);transition:opacity .2s;`;
       el.style.pointerEvents = "none";
       el.addEventListener("click", (ev) => { ev.stopPropagation(); setSelectedPost(pd.gnode); });

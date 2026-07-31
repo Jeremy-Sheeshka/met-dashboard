@@ -1,12 +1,7 @@
 import { getGlobalGraph } from "@/lib/concepts";
-import Galaxy from "@/components/Galaxy";
+import GalaxyClient from "@/components/GalaxyClient";
 
 export default function HomePage() {
   const graph = getGlobalGraph();
-
-  return (
-    <div className="flex flex-col h-[calc(100vh-57px)]">
-      <Galaxy graph={graph} />
-    </div>
-  );
+  return <GalaxyClient graph={graph} />;
 }

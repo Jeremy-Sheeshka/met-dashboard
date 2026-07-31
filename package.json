@@ -13,6 +13,7 @@
   "dependencies": {
     "@stefanjudis/sparkly-text": "^1.1.2",
     "@tailwindcss/typography": "^0.5.20",
+    "@types/three": "^0.185.1",
     "d3": "^7.9.0",
     "embla-carousel-react": "^8.6.0",
     "fuse.js": "^7.5.0",
@@ -20,7 +21,8 @@
     "next-mdx-remote": "^6.0.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
